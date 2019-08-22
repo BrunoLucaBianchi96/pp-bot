@@ -1,2 +1,1 @@
-web: gunicorn ranti:app
-worker: python worker.py
+worker: python pingpongbot.py
