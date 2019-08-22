@@ -417,6 +417,7 @@ def print_leaderboard():
 def init():
     global USER_DATA
     global USERS_LIST
+    print("Trying to connect to slack")
     if slack_client.rtm_connect(with_team_state=False):
         print("Bot connected and running!")
         # Read bot's user ID by calling Web API method `auth.test`
