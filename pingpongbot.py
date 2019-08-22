@@ -2,6 +2,7 @@ import time
 from random import randrange
 import json
 import os
+import sys
 from slackclient import SlackClient
 
 # instantiate Slack client
@@ -448,6 +449,6 @@ def run():
         time.sleep(RTM_READ_DELAY)
 
 
-print("Starting bot")
+sys.stderr.write("Starting bot err")
 init()
 run()
