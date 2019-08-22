@@ -448,5 +448,6 @@ def run():
         time.sleep(RTM_READ_DELAY)
 
 
+print("Starting bot")
 init()
 run()
