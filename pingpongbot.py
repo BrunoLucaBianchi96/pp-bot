@@ -41,7 +41,7 @@ class PingPongBot:
         self.USER_DATA
         # global self.USERS_LIST
         print("Trying to connect to slack")
-        if slack_client.rtm_connect(with_team_state=False):
+        if slack_client.rtm_connect():
             print("Bot connected and running!")
             self.USERS_LIST = slack_client.api_call("users.list")["members"]
             for user in self.USERS_LIST:
