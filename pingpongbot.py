@@ -13,12 +13,17 @@ pingpongbot_id = None
 
 # @slack_client.RTMClient.run_on(event="message")
 
+def bot_was_mentioned(param):
+    return True if str(param).startswith("pp ") else False
+
+
 class PingPongBot:
     def __init__(self):
         self.ALLOWED_CHANNELS = ["CMM7PDSUX"]
         # self.TEST_CHANNEL = "CMM7PDSUX"
         self.USERS_LIST = []
         self.USER_DATA = {}
+        self.LOOKING_FOR_MATCH = []
         self.ACTIVE_CHALLENGES = []
         self.ACTIVE_MATCHES = []
         self.PLAYERS_IN_A_MATCH = []
@@ -29,7 +34,7 @@ class PingPongBot:
         self.LEADERBOARD_FILE_NAME = 'leaderboard.json'
         self.AUTO_SHOW_SCOREBOARD_ON_LOSS = True
         self.MINIMUM_ELO_GAIN = 10
-        self.DEBUG_MODE = True
+        self.DEBUG_MODE = os.environ.get("DEBUG", "True") == "True"
         self.TAUNTS_LIST = ["No sabes lo que {0} dijo de tu vieja, {1}!",
                             "Lo que te dijo {0}! En mi barrio matan por menos, {1}",
                             "{0} dijo que sos re mediocre en el ping pong, {1}",
@@ -38,8 +43,7 @@ class PingPongBot:
                             "{0} dijo que {1} va al baño y no tira la cadena",
                             "{0} dijo que te gusta PHP, {1}"]
 
-        self.USER_DATA
-        # global self.USERS_LIST
+
         print("Trying to connect to slack")
         if slack_client.rtm_connect():
             print("Bot connected and running!")
@@ -49,7 +53,7 @@ class PingPongBot:
 
             # print(self.USER_DATA)
             print("Loading db")
-            self.init_db()
+            self.init_db(False)
         else:
             print("Connection failed. Exception traceback printed above.")
             return None, None
@@ -64,7 +68,7 @@ class PingPongBot:
         print("Parsing event " + str(event))
         channel = event["channel"]
 
-        if event["type"] == "message" and "subtype" not in event and self.bot_was_mentioned(event["text"]):
+        if event["type"] == "message" and "subtype" not in event and bot_was_mentioned(event["text"]):
             message = self.parse_mention(event["text"])
             # print(event)
             return message, channel, event["user"]
@@ -162,8 +166,16 @@ class PingPongBot:
             response = self.cancel_challenge_or_match(user)
         if action == 'acceptAs' and self.DEBUG_MODE:
             response = self.accept_challenge(self.strip_mention(params[0]))
+        if action == 'accept_anyone_As' and self.DEBUG_MODE:
+            response = self.handle_accept_anyone(self.strip_mention(params[0]))
         if action == 'taunt':
             response = self.random_taunt(self.mention(user), params[0])
+        if action == 'accept_anyone':
+            response = self.handle_accept_anyone(user)
+        if action == 'help':
+            response = self.print_help()
+        if action == 'reset_leaderboard':
+            response = self.reset_leaderboard()
 
         # Sends the response back to the channel
         slack_client.api_call(
@@ -179,6 +191,12 @@ class PingPongBot:
 
     def handle_challenge(self, user, params):
         enemy_user = params[0]
+
+        if enemy_user == 'anyone' or enemy_user == 'random':
+            print("Putting player in queue: " + self.USER_DATA[self.strip_mention(user)])
+            self.challenge_anyone(user)
+            return 'Waiting for an opponent'
+
         if self.has_active_challenge(user):
             return 'You have a pending challenge!'
 
@@ -344,7 +362,7 @@ class PingPongBot:
             challenger_user = challenge['challenger']
             self.create_match_between(accepting_user, challenger_user)
             self.delete_challenge(challenge)
-            return 'has aceptado el challenge de <@' + challenger_user + '>'
+            return 'has aceptado el challenge de <@' + self.strip_mention(challenger_user) + '>'
         else:
             print("User " + accepting_user + " has not been challenged" + str(self.ACTIVE_CHALLENGES))
             return 'No hay challenge para aceptar'
@@ -355,11 +373,11 @@ class PingPongBot:
                 if challenge['challenged'] == challenged:
                     return challenge
 
-    def init_db(self):
-        if os.path.exists(self.LEADERBOARD_FILE_NAME) and os.path.getsize(self.LEADERBOARD_FILE_NAME) > 0:
+    def init_db(self, force_delete):
+        if (os.path.exists(self.LEADERBOARD_FILE_NAME) and os.path.getsize(self.LEADERBOARD_FILE_NAME) > 0) and not force_delete:
             pass
         else:
-            with open(self.LEADERBOARD_FILE_NAME, 'w+') as file:
+            with open(self.LEADERBOARD_FILE_NAME, 'w') as file:
                 data = {}
                 for user in self.USERS_LIST:
                     data[user.get("id")] = dict(
@@ -369,7 +387,7 @@ class PingPongBot:
                         won=0,
                         lost=0,
                     )
-                json_string = json.dump(data, file)
+                json.dump(data, file)
                 file.close()
 
     def load_db_file(self):
@@ -411,7 +429,40 @@ class PingPongBot:
         leaderboard = self.format_dict_as_leaderboard(data_dict)
         return str(leaderboard)
 
+    def handle_accept_anyone(self, user):
+        if len(self.LOOKING_FOR_MATCH) >= 1:
+            other_user = self.LOOKING_FOR_MATCH[0]
+            self.create_challenge(self.strip_mention(self.LOOKING_FOR_MATCH[0]), self.strip_mention(user))
+            self.LOOKING_FOR_MATCH.remove(other_user)
+            return self.accept_challenge(user)
+        else:
+            return "No other players in QUEUE"
 
+    def challenge_anyone(self, user):
+        self.LOOKING_FOR_MATCH.append(self.strip_mention(user))
+        print (str(self.LOOKING_FOR_MATCH))
+        return "You are now in queue"
 
-    def bot_was_mentioned(self, param):
-        return True if str(param).startswith("pp ") else False
+    def reset_leaderboard(self):
+        self.init_db(True)
+        self.FILE_CACHE = None
+        return "Deleted leaderboard"
+
+    def print_help(self):
+        french_quotes = "```"
+        command_help = [
+            dict(name='leaderboard', description='Shows current leaderboard'),
+            dict(name='challenge', description='Challenge someone by tagging them, or anyone by typing "pp challenge anyone" or "pp challenge random"'),
+            dict(name='lost', description='Mark your last match as lost'),
+            dict(name='cancel', description='Cancel active match or challenge'),
+            dict(name='accept', description='Accept a challenge for you'),
+            dict(name='accept_anyone', description='Accept a challenge for anyone'),
+            dict(name='help', description='prints this (duh)'),
+            dict(name='taunt', description='Tell someone how much they suck')
+        ]
+        text = ''
+        for command in command_help:
+            text += "{0} : {1} \n".format(command["name"], command["description"])
+
+        return "{0}\n{1}\n{0}".format(french_quotes, text)
+
