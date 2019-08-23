@@ -1,1 +1,1 @@
-worker: python simple_app.py
+web: python simple_app.py
