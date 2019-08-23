@@ -377,7 +377,7 @@ class PingPongBot:
         if (os.path.exists(self.LEADERBOARD_FILE_NAME) and os.path.getsize(self.LEADERBOARD_FILE_NAME) > 0) and not force_delete:
             pass
         else:
-            mode = "w" if force_delete else "w+"
+            mode = "w+" if force_delete else "w"
             with open(self.LEADERBOARD_FILE_NAME, mode) as file:
                 data = {}
                 for user in self.USERS_LIST:
@@ -465,5 +465,5 @@ class PingPongBot:
         for command in command_help:
             text += "{0} : {1} \n".format(command["name"], command["description"])
 
-        return "{0}\n{1}\n{0}".format(french_quotes, text)
+        return "{0}{1}{0}".format(french_quotes, text)
 
