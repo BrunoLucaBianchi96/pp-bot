@@ -377,7 +377,8 @@ class PingPongBot:
         if (os.path.exists(self.LEADERBOARD_FILE_NAME) and os.path.getsize(self.LEADERBOARD_FILE_NAME) > 0) and not force_delete:
             pass
         else:
-            with open(self.LEADERBOARD_FILE_NAME, 'w') as file:
+            mode = "w" if force_delete else "w+"
+            with open(self.LEADERBOARD_FILE_NAME, mode) as file:
                 data = {}
                 for user in self.USERS_LIST:
                     data[user.get("id")] = dict(
